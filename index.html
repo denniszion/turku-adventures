@@ -414,6 +414,35 @@
     opacity: 0.6;
   }
 
+
+  /* ── COMMENTS ── */
+  .comments { max-width: 720px; margin: 0 auto; padding: 0 5vw; }
+  .comments h2 { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 900; margin-bottom: 8px; }
+  .comments .comments-intro { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; font-style: italic; color: var(--stone); margin-bottom: 32px; }
+  .comment-form { display: grid; gap: 14px; margin-bottom: 40px; }
+  .comment-form input, .comment-form textarea {
+    font: inherit; font-size: 0.95rem; padding: 14px 16px; border: 1px solid rgba(26,20,16,0.18);
+    background: #fff; color: var(--ink); border-radius: 2px;
+  }
+  .comment-form input:focus, .comment-form textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .comment-form textarea { min-height: 120px; resize: vertical; }
+  .comment-form .hp { position: absolute; left: -9999px; }
+  .comment-form button {
+    justify-self: start; font: inherit; font-size: 0.75rem; letter-spacing: 0.16em; text-transform: uppercase;
+    background: var(--ink); color: var(--gold); border: 0; padding: 14px 28px; cursor: pointer;
+  }
+  .comment-form button:disabled { opacity: 0.5; cursor: wait; }
+  .comment-status { font-size: 0.85rem; color: var(--rust); min-height: 1.2em; }
+  .comment-list { list-style: none; }
+  .comment-item { border-top: 1px solid rgba(26,20,16,0.1); padding: 20px 0; }
+  .comment-meta { font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--stone); margin-bottom: 6px; }
+  .comment-meta strong { color: var(--ink); font-weight: 500; }
+  .comment-body { line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; }
+  .comment-empty { color: var(--stone); font-style: italic; }
+  .fb-embed { margin: 48px 0 0; }
+  .fb-embed h3 { font-family: 'Playfair Display', serif; font-size: 1.3rem; margin-bottom: 16px; }
+  .fb-embed[hidden] { display: none; }
+
   @media (max-width: 600px) {
     .tips-grid { grid-template-columns: 1fr; }
     .stats { grid-template-columns: 1fr; }
@@ -540,11 +569,109 @@
 
 </article>
 
+<!-- COMMENTS -->
+<section class="comments" id="comments">
+  <h2>Join the Conversation</h2>
+  <p class="comments-intro">Been to Turku, or dreaming of it? Leave a note for fellow wanderers.</p>
+
+  <form class="comment-form" id="comment-form">
+    <input type="text" name="name" placeholder="Your name" maxlength="60" required aria-label="Your name">
+    <textarea name="message" placeholder="Share your thoughts…" maxlength="2000" required aria-label="Your comment"></textarea>
+    <input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <button type="submit">Post Comment</button>
+    <div class="comment-status" id="comment-status" role="status"></div>
+  </form>
+
+  <ul class="comment-list" id="comment-list"></ul>
+
+  <!-- FACEBOOK: paste a public Facebook post URL into data-href to show it here, with its likes and comments -->
+  <div class="fb-embed" id="fb-embed" data-href="" hidden>
+    <h3>From Our Facebook</h3>
+    <div class="fb-post" data-width="auto" data-show-text="true"></div>
+  </div>
+</section>
+
 <footer>
   <div class="footer-title">Turku, Finland</div>
   <p>Ancient Capital · Baltic Coast · Southwest Finland</p>
   <p style="margin-top:16px; font-size:0.65rem; opacity:0.4;">City Adventure Blog · Written with joy from the Cathedral Steps</p>
 </footer>
+
+<script>
+(function () {
+  var form = document.getElementById('comment-form');
+  var list = document.getElementById('comment-list');
+  var status = document.getElementById('comment-status');
+
+  function render(c) {
+    var li = document.createElement('li');
+    li.className = 'comment-item';
+    var meta = document.createElement('div');
+    meta.className = 'comment-meta';
+    var who = document.createElement('strong');
+    who.textContent = c.name;
+    meta.appendChild(who);
+    meta.appendChild(document.createTextNode(' · ' + new Date(c.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })));
+    var body = document.createElement('p');
+    body.className = 'comment-body';
+    body.textContent = c.message;
+    li.appendChild(meta);
+    li.appendChild(body);
+    return li;
+  }
+
+  function showEmpty() {
+    list.innerHTML = '<li class="comment-empty">No comments yet — be the first.</li>';
+  }
+
+  fetch('/api/comments')
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (rows) {
+      if (!rows.length) return showEmpty();
+      rows.forEach(function (c) { list.appendChild(render(c)); });
+    })
+    .catch(showEmpty);
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = form.querySelector('button');
+    btn.disabled = true;
+    status.textContent = '';
+    fetch('/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: form.name.value, message: form.message.value, website: form.website.value })
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) { status.textContent = res.data.error || 'Something went wrong.'; return; }
+        if (res.data.id) {
+          var empty = list.querySelector('.comment-empty');
+          if (empty) empty.remove();
+          list.insertBefore(render(res.data), list.firstChild);
+        }
+        form.reset();
+      })
+      .catch(function () { status.textContent = 'Could not post your comment. Please try again.'; })
+      .finally(function () { btn.disabled = false; });
+  });
+
+  // Facebook embedded post: only loads when a post URL is set
+  var fb = document.getElementById('fb-embed');
+  var href = fb.getAttribute('data-href');
+  if (href) {
+    fb.querySelector('.fb-post').setAttribute('data-href', href);
+    fb.hidden = false;
+    var root = document.createElement('div');
+    root.id = 'fb-root';
+    document.body.insertBefore(root, document.body.firstChild);
+    var sdk = document.createElement('script');
+    sdk.async = true; sdk.defer = true; sdk.crossOrigin = 'anonymous';
+    sdk.src = 'https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v21.0';
+    document.body.appendChild(sdk);
+  }
+})();
+</script>
 
 </body>
 </html>
