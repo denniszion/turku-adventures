@@ -414,6 +414,126 @@
     opacity: 0.6;
   }
 
+  /* ── COMMENTS ── */
+  .comments {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 5vw 40px;
+  }
+
+  .comments h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    color: var(--ink);
+    margin: 24px 0 28px;
+  }
+
+  .comments h2::before {
+    content: '';
+    display: block;
+    width: 48px;
+    height: 3px;
+    background: var(--gold);
+    margin-bottom: 14px;
+  }
+
+  .comment-form {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 48px;
+  }
+
+  .comment-form label {
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--stone);
+    display: grid;
+    gap: 6px;
+  }
+
+  .comment-form input,
+  .comment-form textarea {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1rem;
+    color: var(--ink);
+    background: #fff;
+    border: 1px solid rgba(140,130,120,0.35);
+    padding: 12px 14px;
+    letter-spacing: normal;
+    text-transform: none;
+    transition: border-color 0.2s;
+  }
+
+  .comment-form textarea { min-height: 120px; resize: vertical; }
+
+  .comment-form input:focus,
+  .comment-form textarea:focus { outline: none; border-color: var(--gold); }
+
+  .comment-form button {
+    justify-self: start;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--ink);
+    border: none;
+    padding: 14px 28px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .comment-form button:hover { background: var(--rust); }
+  .comment-form button:disabled { opacity: 0.5; cursor: wait; }
+
+  .comment-status { font-size: 0.85rem; color: var(--rust); min-height: 1.2em; }
+
+  .comment-list { list-style: none; }
+
+  .comment {
+    padding: 22px 0;
+    border-top: 1px solid rgba(140,130,120,0.25);
+  }
+
+  .comment-meta {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+
+  .comment-name {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  .comment-date {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--stone);
+  }
+
+  .comment-body {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.15rem;
+    line-height: 1.7;
+    color: #2C2520;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .comment-empty {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 1.15rem;
+    color: var(--stone);
+  }
+
   @media (max-width: 600px) {
     .tips-grid { grid-template-columns: 1fr; }
     .stats { grid-template-columns: 1fr; }
@@ -539,6 +659,95 @@
   <div class="ornament">— ✦ —</div>
 
 </article>
+
+<!-- COMMENTS -->
+<section class="comments" id="comments">
+  <h2>Comments</h2>
+
+  <form class="comment-form" id="comment-form">
+    <label>Name
+      <input type="text" name="name" maxlength="80" required autocomplete="name">
+    </label>
+    <label>Comment
+      <textarea name="body" maxlength="2000" required></textarea>
+    </label>
+    <button type="submit">Post comment</button>
+    <div class="comment-status" id="comment-status" role="status"></div>
+  </form>
+
+  <ul class="comment-list" id="comment-list">
+    <li class="comment-empty">Loading comments…</li>
+  </ul>
+</section>
+
+<script>
+  (function () {
+    var form = document.getElementById('comment-form');
+    var list = document.getElementById('comment-list');
+    var status = document.getElementById('comment-status');
+
+    function renderComment(c) {
+      var li = document.createElement('li');
+      li.className = 'comment';
+      var meta = document.createElement('div');
+      meta.className = 'comment-meta';
+      var name = document.createElement('span');
+      name.className = 'comment-name';
+      name.textContent = c.name;
+      var date = document.createElement('span');
+      date.className = 'comment-date';
+      date.textContent = new Date(c.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      meta.append(name, date);
+      var body = document.createElement('p');
+      body.className = 'comment-body';
+      body.textContent = c.body;
+      li.append(meta, body);
+      return li;
+    }
+
+    function showEmpty(text) {
+      list.innerHTML = '';
+      var li = document.createElement('li');
+      li.className = 'comment-empty';
+      li.textContent = text;
+      list.append(li);
+    }
+
+    fetch('/api/comments')
+      .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function (comments) {
+        if (!comments.length) return showEmpty('No comments yet — be the first to share your thoughts.');
+        list.innerHTML = '';
+        comments.forEach(function (c) { list.append(renderComment(c)); });
+      })
+      .catch(function () { showEmpty('Comments could not be loaded right now.'); });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var button = form.querySelector('button');
+      button.disabled = true;
+      status.textContent = '';
+      fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.elements['name'].value, body: form.elements['body'].value })
+      })
+        .then(function (r) {
+          return r.json().then(function (data) {
+            if (!r.ok) throw new Error(data.error || 'Something went wrong');
+            return data;
+          });
+        })
+        .then(function (c) {
+          if (list.querySelector('.comment-empty')) list.innerHTML = '';
+          list.prepend(renderComment(c));
+          form.reset();
+        })
+        .catch(function (err) { status.textContent = err.message || 'Something went wrong'; })
+        .finally(function () { button.disabled = false; });
+    });
+  })();
+</script>
 
 <footer>
   <div class="footer-title">Turku, Finland</div>
